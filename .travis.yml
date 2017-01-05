@@ -1,0 +1,151 @@
+
+# Use new container infrastructure to enable caching
+sudo: false
+
+# Do not choose a language; we provide our own build tools.
+language: generic
+
+# Caching so the next build will be fast too.
+cache:
+  directories:
+  - $HOME/.ghc
+  - $HOME/.cabal
+  - $HOME/.stack
+
+
+matrix:
+  include:
+  # We grab the appropriate GHC and cabal-install versions from hvr's PPA. See:
+  # https://github.com/hvr/multi-ghc-travis
+
+  - env: BUILD=cabal GHCVER=7.10.3 CABALVER=1.22 
+    compiler: ": #GHC 7.10.3"
+    addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3], sources: [hvr-ghc]}}
+
+  - env: BUILD=cabal GHCVER=8.0.1 CABALVER=1.24 
+    compiler: ": #GHC 8.0.1"
+    addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.1], sources: [hvr-ghc]}}
+
+  # Stack builds. Can pass in arbitrary Stack arguments via the ARGS
+  # variable, such as using --stack-yaml to point to a different file.
+  - env: BUILD=stack ARGS="--resolver lts-6" GHCVER=7.10.3 CABALVER=1.22 
+    compiler: ": #stack 7.10.3"
+    addons: {apt: {packages: [libgmp-dev,cabal-install-1.22,ghc-7.10.3], sources: [hvr-ghc]}}
+
+  - env: BUILD=stack ARGS="--resolver lts-7" GHCVER=7.10.3 CABALVER=1.22 
+    compiler: ": #stack 8.0.1"
+    addons: {apt: {packages: [libgmp-dev,cabal-install-1.22,ghc-7.10.3], sources: [hvr-ghc]}}
+
+before_install:
+- export PROG="bogocopy"
+# Using compiler above sets CC to an invalid value, so unset it
+- unset CC
+# Download and unpack the stack executable
+- export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$HOME/.local/bin:/opt/alex/$ALEXVER/bin:/opt/happy/$HAPPYVER/bin:$HOME/.cabal/bin:$PATH
+- mkdir -p ~/.local/bin
+- |
+  if [ `uname` = "Darwin" ]
+  then
+    travis_retry curl --insecure -L https://www.stackage.org/stack/osx-x86_64 | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
+    stack setup
+    stack install cabal-install
+    export PATH=`stack path --compiler-bin`:$PATH
+  else
+    travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+    stack setup
+  fi
+
+  # Use the more reliable S3 mirror of Hackage
+  mkdir -p $HOME/.cabal
+  echo 'remote-repo: hackage.haskell.org:http://hackage.fpcomplete.com/' > $HOME/.cabal/config
+  echo 'remote-repo-cache: $HOME/.cabal/packages' >> $HOME/.cabal/config
+
+  if [ "$CABALVER" != "1.16" ]
+  then
+    echo 'jobs: $ncpus' >> $HOME/.cabal/config
+  fi
+- stack --version
+- cabal --version
+- ghc --version
+- travis_retry cabal update
+
+install:
+- echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
+- |
+  set -ex
+  case "$BUILD" in
+    stack)
+      stack init --install-ghc --solver $ARGS
+      stack --no-terminal  $ARGS test $PKG_FLAGS --bench --only-dependencies
+      ;;
+    cabal)
+      # Get the list of packages from the stack.yaml file
+      stack init --solver
+      PACKAGES=$(stack --install-ghc query locals | grep '^ *path' | sed 's@^ *path:@@')
+      if [ -z "$PACKAGES" ]; then
+        false;
+      else
+        true;
+      fi
+
+      cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
+      ;;
+  esac
+  set +ex
+
+
+script:
+- |
+  set -ex
+  case "$BUILD" in
+    stack)
+      stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps
+      stack --no-terminal $ARGS exec "$PROG" -- --help
+      ;;
+    cabal)
+      cabal install --flags="enablewebtests" --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
+      # TODO:  --show-details=always 
+
+      ORIGDIR=$(pwd)
+      for dir in $PACKAGES
+      do
+        cd $dir
+        cabal check || [ "$CABALVER" == "1.16" ]
+        cabal sdist
+        PKGVER=$(cabal info . | awk '{print $2;exit}')
+        SRC_TGZ=$PKGVER.tar.gz
+        cd dist
+        tar zxfv "$SRC_TGZ"
+        cd "$PKGVER"
+        cabal configure --enable-tests -v2 $PKG_FLAGS
+        cabal build
+        cabal test --show-details=always
+        cabal exec "$PROG" -- --help
+        cd $ORIGDIR
+      done
+      ;;
+  esac
+  set +ex
+
+before_deploy:
+- PKGVER=$(cabal info . | head -n  1 | cut -d ' ' -f 2)
+- SRC_TGZ=$PKGVER.tar.gz
+- |
+  if [ ! -f "$SRC_TGZ" ] ; then
+    stack sdist;
+    distdir=`stack path --dist-dir`; 
+    cp $distdir/$SRC_TGZ .;
+  fi
+- ls -al "$SRC_TGZ"; true
+
+#deploy:
+#  provider: releases
+#  on:
+#    repo: phlummox/bogocopy
+#    all_branches: true
+##    tags: true
+#  file: "$SRC_TGZ"
+#  skip_cleanup: true
+#  api_key:
+#    secure: XX
+
