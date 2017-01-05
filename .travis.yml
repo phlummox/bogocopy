@@ -138,14 +138,14 @@ before_deploy:
   fi
 - ls -al "$SRC_TGZ"; true
 
-#deploy:
-#  provider: releases
-#  on:
-#    repo: phlummox/bogocopy
-#    all_branches: true
-##    tags: true
-#  file: "$SRC_TGZ"
-#  skip_cleanup: true
-#  api_key:
-#    secure: XX
+deploy:
+  provider: releases
+  on:
+    repo: phlummox/bogocopy
+    all_branches: true
+    tags: true
+  file: "$SRC_TGZ"
+  skip_cleanup: true
+  api_key:
+    secure: KGzAh6sY4Y16UV55vXv+kuscqnEx8D8G0wcPcCcobUxQGVEXwwP6qyrcodnLwPIX5oLFSsGsKMvyZ1Qc0LzUHgJp24qCCRAmp4yJkfqpxvngyvuxY0EivdYmpTIGIhlX8dUFc30WkoTeYv8TL2Q2FouFJmuSrskeBdfH06YmAcidw/fuQ0vXA65jpVwaih8hA1TU2+17e/8eAuWOg2xBqnLMlKTP1XjZHY8M89TU0rEBZqRjD/5RX29Xn6QZpEK7WJxIPgE3PUUS1DWsA5cxuBtuMzdC2eMculFzS/ns1EJtHXBXWvTRBD3oZSfLEcuojikAwL7U9J4jhB51hZ1SevOo0wc//RH0h9yBNHaucOutejkXNhnw9sOFFVeKErBS59AuARkKzxa/7FPZhn1Kcw23O8gpaVkMIFY6B1YM48CiiwOk0Z9TK+ODtaKe4nYC/m3vgnM5wiK6qIaZtG/jjY3BGA+xgmOyb+1hJspgtIqHxjJwyTwG9wQ4e1Et2ajhhrMwAeyuQPMqpiQeNmTg1RA3GeDxzDLgFZmij1MC1coohCGf0Hp7OO6VEFT0rdpjPiRLh00oiU+8JIfQ9iIXgaEOFa/Jg+gWbZ+GJvC/ApB6du1Dw03vi/2DP7DPC1NFt74VV/aMppLW/LQptB1Mk8qiPSvbRrWykpy+spPzGa0=
 
